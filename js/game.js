@@ -27,7 +27,7 @@ var Manager = function(width, height, cb_done) {
 	var self = {
 		cb_done: cb_done,
 		count: 0,
-		total: 4,
+		total: 5,
 		resources: {}
 	};
 
@@ -36,7 +36,8 @@ var Manager = function(width, height, cb_done) {
 			font: "img/font.png",
 			clouds0: "img/clouds0.png",
 			clouds1: "img/clouds1.png",
-			title: "img/dual.png"
+			title: "img/dual.png",
+			tiles: "img/tiles.png"
 		};
 
 		for(id in res) {
@@ -81,6 +82,70 @@ var Manager = function(width, height, cb_done) {
 	return self.init();
 };
 
+// map
+
+var Map = function(data, sw, sh, manager) {
+	var self = data;
+
+	self.init = function() {
+
+		self.sw = sw;
+		self.sh = sh;
+		self.manager = manager;
+
+		self.tilesets[0].rows = self.tilesets[0].imagewidth / self.tilesets[0].tilewidth;
+		self.tilesets[0].cols = self.tilesets[0].imageheight / self.tilesets[0].tileheight;
+
+		self.x = 0;
+		self.y = 0;
+		self.w = Math.floor(sw / self.tilesets[0].tilewidth) + 2;
+		self.h = Math.floor(sh / self.tilesets[0].tileheight) + 2;
+
+		self.max_pw = self.width * self.tilesets[0].tilewidth;
+		self.max_ph = self.height * self.tilesets[0].tileheight;
+
+		return self;
+	};
+
+	self.set_viewport = function(x, y) {
+		var fx = Math.max(x - self.sw / 2, 0),
+			fy = Math.max(y - self.sh / 2, 0);
+
+		if(fx + self.sw / 2 > self.max_pw) {
+			fx = self.max_pw - self.sw;
+		}
+		if(fy + self.sh / 2 > self.max_ph) {
+			fy = self.max_ph - self.sh;
+		}
+
+		self.x = Math.floor(Math.min(Math.max(fx, 0), self.max_pw - self.sw));
+		self.y = Math.floor(Math.min(Math.max(fy, 0), self.max_ph - self.sh));
+	};
+
+	self.draw = function(ctx) {
+		var ts = self.tilesets[0];
+		var mx = Math.floor(self.x / ts.tilewidth),
+			my = Math.floor(self.y / ts.tileheight),
+		    sx = self.x % ts.tilewidth,
+			sy = self.y % ts.tileheight;
+
+		for(var y = 0; y < self.h; y++) {
+			for(var x = 0; x < self.w; x++) {
+				self.layers.forEach(function(l) {
+					if(l.type == "tilelayer") {
+						var gid = l.data[x + mx + (y + my) * l.width];
+						if(gid != 0) {
+							gid -= ts.firstgid;
+							ctx.drawImage(self.manager.resources[ts.image], (gid % ts.rows) * ts.tilewidth,  Math.floor(gid / ts.rows) * ts.tileheight, ts.tilewidth, ts.tileheight, x * ts.tilewidth - Math.floor(sx), y * ts.tileheight - Math.floor(sy), ts.tilewidth, ts.tileheight);
+						}
+					}
+				});
+			}
+		}
+	};
+
+	return self.init();
+};
 
 // main game object
 
@@ -92,6 +157,7 @@ var Game = function(id) {
 
 		// resources
 		manager: undefined,
+		map: undefined,
 
 		width: 320,
 		height: 240,
@@ -106,6 +172,9 @@ var Game = function(id) {
 		left: false,
 		right: false,
 		fire: false,
+
+		x: 0,
+		y: 0,
 
 		dt: 0,
 		then: 0
@@ -129,6 +198,7 @@ var Game = function(id) {
 		window.onresize = self.onresize;
 
 		self.manager = Manager(self.width, self.height, self.loading_done);
+		self.map = Map(map, self.width, self.height, self.manager);
 
 		return self;
 	};
@@ -192,6 +262,10 @@ var Game = function(id) {
 		ctx.restore();
 	};
 
+	self.draw_play = function(ctx) {
+		self.map.draw(ctx);
+	};
+
 	self.draw = function() {
 		self.ctx.save();
 		self.ctx.scale(self.scale, self.scale);
@@ -205,8 +279,7 @@ var Game = function(id) {
 				self.draw_menu(self.ctx);
 			break;
 			case "play":
-				self.ctx.clearRect(0, 0, self.width, self.height);
-				self.draw_menu(self.ctx);
+				self.draw_play(self.ctx);
 				if (self.paused) {
 					self.draw_paused(self.ctx);
 				}
@@ -224,6 +297,27 @@ var Game = function(id) {
 			case "menu":
 				self.bg_offset[0] += self.bg_offset[0] > self.width ? -self.width : 40 * dt;
 				self.bg_offset[1] += self.bg_offset[1] > self.width ? -self.width : 80 * dt;
+			break;
+			case "play":
+				var k = 200, incx = 0, incy = 0;
+				if (self.up) {
+					incy -= k * dt;
+				}
+				if (self.down) {
+					incy += k * dt;
+				}
+				if (self.left) {
+					incx -= k * dt;
+				}
+				if (self.right) {
+					incx += k * dt;
+				}
+
+				if (incx || incy) {
+					self.x += incx;
+					self.y += incy;
+					self.map.set_viewport(self.x, self.y);
+				}
 			break;
 		}
 	};
@@ -247,6 +341,7 @@ var Game = function(id) {
 			case "menu":
 				if(event.keyCode == 83) {
 					self.state = "play";
+					self.map.set_viewport(0, 0);
 				}
 			break;
 			case "play":
