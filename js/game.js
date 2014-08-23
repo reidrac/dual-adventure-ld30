@@ -155,7 +155,7 @@ var Game = function(id) {
 		self.manager.render_text("Press S to Start!", "press_s");
 		self.manager.render_text("a game by @reidrac for LD30", "game_by");
 		self.manager.render_text("PAUSED GAME", "paused");
-		self.manager.render_text("(press P to resume)", "resume");
+		self.manager.render_text("(press P again to resume)", "resume");
 
 		self.canvas.style.background = "rgb(255, 130, 206)";
 		self.bg_offset = [0.0, 0.0];
@@ -185,7 +185,7 @@ var Game = function(id) {
 
 	self.draw_paused = function(ctx) {
 		ctx.save();
-		ctx.fillStyle = "rgba(128, 0, 0, 0.8)";
+		ctx.fillStyle = "rgba(33, 22, 64, 0.8)";
 		ctx.fillRect(0, 0, self.width, self.height);
 		ctx.drawImage(self.manager.resources["paused"], Math.floor(self.width / 2 - self.manager.resources["paused"].width / 2), self.height / 2 - 16);
 		ctx.drawImage(self.manager.resources["resume"], Math.floor(self.width / 2 - self.manager.resources["resume"].width / 2), self.height / 2 - 2);
@@ -205,6 +205,8 @@ var Game = function(id) {
 				self.draw_menu(self.ctx);
 			break;
 			case "play":
+				self.ctx.clearRect(0, 0, self.width, self.height);
+				self.draw_menu(self.ctx);
 				if (self.paused) {
 					self.draw_paused(self.ctx);
 				}
@@ -244,7 +246,7 @@ var Game = function(id) {
 		switch(self.state) {
 			case "menu":
 				if(event.keyCode == 83) {
-					// start
+					self.state = "play";
 				}
 			break;
 			case "play":
