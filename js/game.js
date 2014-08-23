@@ -158,7 +158,7 @@ var Game = function(id) {
 		self.manager.render_text("(press P to resume)", "resume");
 
 		self.canvas.style.background = "rgb(255, 130, 206)";
-		self.bg_offset = [0, 0];
+		self.bg_offset = [0.0, 0.0];
 		self.state = "menu";
 	};
 
@@ -220,22 +220,23 @@ var Game = function(id) {
 
 		switch(self.state) {
 			case "menu":
-				self.bg_offset[0] += self.bg_offset[0] > self.width ? -self.width : dt / 32; 
-				self.bg_offset[1] += self.bg_offset[1] > self.width ? -self.width : dt / 16;
+				self.bg_offset[0] += self.bg_offset[0] > self.width ? -self.width : 40 * dt;
+				self.bg_offset[1] += self.bg_offset[1] > self.width ? -self.width : 80 * dt;
 			break;
 		}
 	};
 
 	self.loop = function loop(now) {
-		var k = 1000 / 80;
-		self.dt += Math.min(1000 / 60, now - self.then) || 0;
+		var k = 1 / 80;
+		self.dt += Math.min(1 / 60, now - self.then) || 0;
 		while(self.dt >= k) {
 			self.update(k);
 			self.dt -= k;
 		}
-		self.draw();
-		self.then = now;
 
+		self.draw();
+
+		self.then = now;
 		requestAnimationFrame(self.loop);
 	};
 
