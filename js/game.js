@@ -104,6 +104,9 @@ var Map = function(data, sw, sh, manager) {
 		self.max_pw = self.width * self.tilesets[0].tilewidth;
 		self.max_ph = self.height * self.tilesets[0].tileheight;
 
+		self.delay = 0;
+		self.frame = 0;
+
 		return self;
 	};
 
@@ -136,12 +139,28 @@ var Map = function(data, sw, sh, manager) {
 						var gid = l.data[x + mx + (y + my) * l.width];
 						if(gid != 0) {
 							gid -= ts.firstgid;
+							switch (gid) {
+								case 20: // water 1
+								case 21: // water 2
+									gid += self.frame;
+								break;
+							}
 							ctx.drawImage(self.manager.resources[ts.image], (gid % ts.rows) * ts.tilewidth,  Math.floor(gid / ts.rows) * ts.tileheight, ts.tilewidth, ts.tileheight, x * ts.tilewidth - Math.floor(sx), y * ts.tileheight - Math.floor(sy), ts.tilewidth, ts.tileheight);
 						}
 					}
 				});
 			}
 		}
+	};
+
+	self.update = function(dt) {
+
+		self.delay += dt;
+		if (self.delay > 0.4) {
+			self.delay = 0;
+			self.frame = self.frame == 3 ? 0 : self.frame + 1;
+		}
+
 	};
 
 	return self.init();
@@ -318,6 +337,8 @@ var Game = function(id) {
 					self.y += incy;
 					self.map.set_viewport(self.x, self.y);
 				}
+
+				self.map.update(dt);
 			break;
 		}
 	};
