@@ -299,7 +299,7 @@ var Game = function(id) {
 
 	self.loading_done = function() {
 		self.manager.render_text("Press S to Start!", "press_s");
-		self.manager.render_text("(or button 1 in your gamepad)", "gamepad");
+		self.manager.render_text("(or START in your gamepad)", "gamepad");
 		self.manager.render_text("a game by @reidrac for LD30", "game_by");
 		self.manager.render_text("PAUSED GAME", "paused");
 		self.manager.render_text("(press P again to resume)", "resume");
@@ -381,7 +381,7 @@ var Game = function(id) {
 				self.bg_offset[0] += self.bg_offset[0] > self.width ? -self.width : 40 * dt;
 				self.bg_offset[1] += self.bg_offset[1] > self.width ? -self.width : 80 * dt;
 
-				 if (self.manager.has_gamepad && bPressed(self.manager.get_gamepad().buttons[0])) {
+				 if (self.manager.has_gamepad && bPressed(self.manager.get_gamepad().buttons[9])) {
 					self.start = true;
 				 }
 				 if (self.start) {
