@@ -603,6 +603,13 @@ var Game = function(id) {
 							if (!only_gravity) {
 								self.player.jump_delay = 0.1;
 							}
+
+							if (!self.player.alive) {
+								self.queue_message(["Oh, dear! You're dead!", " ",
+													"The BLUE STUFF doesn't belong to this",
+													"world, avoid touching it if you want",
+													"to survive!"]);
+							}
 							break;
 						}
 
@@ -610,12 +617,6 @@ var Game = function(id) {
 						if (incy > 0 && self.map.is_water(self.player.x + 10, self.player.y + incy + 28)
 									&& self.map.is_water(self.player.x + 14, self.player.y + incy + 28)
 									&& self.map.is_water(self.player.x + 18, self.player.y + incy + 28)) {
-							if (self.player.alive) {
-								self.queue_message(["Oh, dear! You're dead!", " ",
-													"The BLUE STUFF doesn't belong to this",
-													"world, avoid touching it if you want",
-													"to survive!"]);
-							}
 							self.player.alive = false;
 						}
 
