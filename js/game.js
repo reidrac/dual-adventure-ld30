@@ -290,6 +290,9 @@ var Game = function(id) {
 		self.player.saved = { x: self.player.x, y: self.player.y };
 		self.reset_player();
 
+		self.end = self.map.get_ent_by_name("End");
+		self.end.y -= self.map.tilesets[0].tileheight;
+
 		self.speed = 160;
 		self.gravity = self.speed * 6;
 		self.jump_speed = self.gravity / 2.6;
@@ -693,6 +696,16 @@ var Game = function(id) {
 						// XXX: REMOVE ME DEBUG
 						if(Math.abs(incx) >= 1) console.log("INCX: " + incx);
 					}
+
+
+					if (self.collision(self.player, self.end)) {
+						self.end.x = -1;
+						self.queue_message(["That's all!", " ",
+											"Thanks for playing the game.", " ",
+											"See you next Ludum Dare.",
+											"(and hopefully my next game will",
+											"be a finished one!)"]);
+					}
 				}
 
 				if (!updated && self.player.frame) {
@@ -713,6 +726,11 @@ var Game = function(id) {
 				self.map.update(dt);
 			break;
 		}
+	};
+
+	self.collision = function(a, b) {
+			// FIXME: harcoded 
+			return (a.x < b.x + 28 && b.x < a.x + 28 && a.y < b.y + 28 && b.y < a.y + 28);
 	};
 
 	self.loop = function loop(now) {
