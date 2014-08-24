@@ -21,6 +21,15 @@
  * THE SOFTWARE.
  */
 
+// helper for gamepad support
+
+function bPressed(b) {
+  if (typeof(b) == "object") {
+    return b.pressed;
+  }
+  return b == 1.0;
+}
+
 // Resource manager?
 
 var Manager = function(width, height, cb_done) {
@@ -28,7 +37,8 @@ var Manager = function(width, height, cb_done) {
 		cb_done: cb_done,
 		count: 0,
 		total: 6,
-		resources: {}
+		resources: {},
+		has_gamepad: false
 	};
 
 	self.init = function() {
@@ -52,7 +62,16 @@ var Manager = function(width, height, cb_done) {
 			};
 		}
 
+		window.addEventListener("gamepadconnected", function() {
+			self.has_gamepad = true;
+		});
+
 		return self;
+	};
+
+
+	self.get_gamepad = function() {
+		return navigator.getGamepads && navigator.getGamepads()[0];
 	};
 
 	self.render_text = function(text, id) {
@@ -216,6 +235,7 @@ var Game = function(id) {
 		left: false,
 		right: false,
 		jump: false,
+		start: false,
 
 		player: undefined,
 
@@ -235,13 +255,13 @@ var Game = function(id) {
 
 		self.onresize();
 
+		self.manager = Manager(self.width, self.height, self.loading_done);
+		self.map = Map(map, self.width, self.height, self.manager);
+
 		document.addEventListener("keydown", self.key_down, false);
 		document.addEventListener("keyup", self.key_up, false);
 
 		window.onresize = self.onresize;
-
-		self.manager = Manager(self.width, self.height, self.loading_done);
-		self.map = Map(map, self.width, self.height, self.manager);
 
 		self.player = self.map.get_ent_by_name("Player");
 		self.player.y -= self.map.tilesets[0].tileheight + 1;
@@ -279,6 +299,7 @@ var Game = function(id) {
 
 	self.loading_done = function() {
 		self.manager.render_text("Press S to Start!", "press_s");
+		self.manager.render_text("(or button 1 in your gamepad)", "gamepad");
 		self.manager.render_text("a game by @reidrac for LD30", "game_by");
 		self.manager.render_text("PAUSED GAME", "paused");
 		self.manager.render_text("(press P again to resume)", "resume");
@@ -306,6 +327,9 @@ var Game = function(id) {
 
 		ctx.drawImage(self.manager.resources["title"], Math.floor(self.width / 2 - self.manager.resources["title"].width / 2), 30);
 		ctx.drawImage(self.manager.resources["press_s"], Math.floor(self.width / 2 - self.manager.resources["press_s"].width / 2), 148);
+		if (self.manager.has_gamepad) {
+			ctx.drawImage(self.manager.resources["gamepad"], Math.floor(self.width / 2 - self.manager.resources["gamepad"].width / 2), 160);
+		}
 		ctx.drawImage(self.manager.resources["game_by"], Math.floor(self.width / 2 - self.manager.resources["game_by"].width / 2), 224);
 	};
 
@@ -356,8 +380,52 @@ var Game = function(id) {
 			case "menu":
 				self.bg_offset[0] += self.bg_offset[0] > self.width ? -self.width : 40 * dt;
 				self.bg_offset[1] += self.bg_offset[1] > self.width ? -self.width : 80 * dt;
+
+				 if (self.manager.has_gamepad && bPressed(self.manager.get_gamepad().buttons[0])) {
+					self.start = true;
+				 }
+				 if (self.start) {
+					self.start = false;
+					self.state = "play";
+					self.map.set_viewport(0, 0);
+				 }
 			break;
 			case "play":
+				if (self.manager.has_gamepad) {
+					var gamepad = self.manager.get_gamepad();
+
+					if(gamepad.axes[0] > 0) {
+						self.right = true;
+						self.left = false;
+					} else {
+						if(gamepad.axes[0] < 0) {
+							self.right = false;
+							self.left = true;
+						} else {
+							self.right = false;
+							self.left = false;
+						}
+					}
+					if(gamepad.axes[1] < 0) {
+						self.up = true;
+						self.down = false;
+					} else {
+						if(gamepad.axes[1] > 0) {
+							self.up = false;
+							self.down = true;
+						} else {
+							self.up = false;
+							self.down = false;
+						}
+					}
+
+					if(bPressed(gamepad.buttons[0])) {
+						self.jump = true;
+					} else {
+						self.jump = false;
+					}
+				}
+
 				var incx = 0, updated = false;
 
 				if (self.left) {
@@ -493,60 +561,56 @@ var Game = function(id) {
 	};
 
 	self.key_down = function(event) {
-		switch(self.state) {
-			case "menu":
-				if(event.keyCode == 83) {
-					self.state = "play";
-					self.map.set_viewport(0, 0);
-				}
-			break;
-			case "play":
-				if(event.keyCode == 80) {
-					self.paused = !self.paused;
-					return;
-				}
-
-				if(event.keyCode == 38) {
-					self.up = true;
-					event.preventDefault();
-				}
-				if(event.keyCode == 39) {
-					self.right = true;
-					event.preventDefault();
-				}
-				if(event.keyCode == 40) {
-					self.down = true;
-					event.preventDefault();
-				}
-				if(event.keyCode == 37) {
-					self.left = true;
-					event.preventDefault();
-				}
-				if(event.keyCode == 90) {
-					self.jump = true;
-					event.preventDefault();
-				}
-			break;
-		};
+		if(event.keyCode == 80 && self.state != "menu") {
+			self.paused = !self.paused;
+			event.preventDefault();
+			return;
+		}
+		if(event.keyCode == 83) {
+			self.start = true;
+			self.manager.has_gamepad = false;
+			event.preventDefault();
+		}
+		if(event.keyCode == 38) {
+			self.up = true;
+			event.preventDefault();
+		}
+		if(event.keyCode == 39) {
+			self.right = true;
+			event.preventDefault();
+		}
+		if(event.keyCode == 40) {
+			self.down = true;
+			event.preventDefault();
+		}
+		if(event.keyCode == 37) {
+			self.left = true;
+			event.preventDefault();
+		}
+		if(event.keyCode == 90) {
+			self.jump = true;
+			event.preventDefault();
+		}
 	};
 
 	self.key_up = function(event) {
-		if(self.state == "play") {
-			if(event.keyCode == 38) {
-				self.up = false;
-			}
-			if(event.keyCode == 39) {
-				self.right = false;
-			}
-			if(event.keyCode == 40) {
-				self.down = false;
-			}
-			if(event.keyCode == 37) {
-				self.left = false;
-			}
-			if(event.keyCode == 90) {
-				self.jump = false;
-			}
+		if(event.keyCode == 83) {
+			self.start = false;
+		}
+		if(event.keyCode == 38) {
+			self.up = false;
+		}
+		if(event.keyCode == 39) {
+			self.right = false;
+		}
+		if(event.keyCode == 40) {
+			self.down = false;
+		}
+		if(event.keyCode == 37) {
+			self.left = false;
+		}
+		if(event.keyCode == 90) {
+			self.jump = false;
 		}
 	};
 
