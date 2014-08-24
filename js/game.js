@@ -378,7 +378,7 @@ var Game = function(id) {
 
 				// short jump
 				if (!self.jump && self.player.inc_y < -self.gravity / 10) {
-					self.player.inc_y = -self.gravity / 10;
+					self.player.inc_y = -self.gravity / 14;
 				}
 
 				if (self.player.inc_y
