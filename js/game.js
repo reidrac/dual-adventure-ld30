@@ -670,7 +670,7 @@ var Game = function(id) {
 	};
 
 	self.key_down = function(event) {
-		if(event.keyCode == 80 && self.state != "menu") {
+		if(event.keyCode == 80 && self.state == "play") {
 			self.paused = !self.paused;
 			event.preventDefault();
 			return;
