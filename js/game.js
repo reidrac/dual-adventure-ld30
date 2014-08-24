@@ -36,7 +36,7 @@ var Manager = function(width, height, cb_done) {
 	var self = {
 		cb_done: cb_done,
 		count: 0,
-		total: 6,
+		total: 10,
 		resources: {},
 		has_gamepad: false
 	};
@@ -48,10 +48,26 @@ var Manager = function(width, height, cb_done) {
 			clouds1: "img/clouds1.png",
 			title: "img/dual.png",
 			tiles: "img/tiles.png",
-			player: "img/player.png"
+			player: "img/player.png",
+			jump: "snd/jump.wav",
+			splash: "snd/splash.wav",
+			head: "snd/head.wav",
+			blip: "snd/blip.wav"
 		};
 
+		createjs.Sound.addEventListener("fileload", createjs.proxy(function() {
+			self.count++;
+			if (self.count == self.total) {
+				self.cb_done();
+			}
+		}));
+
 		for(id in res) {
+			if (res[id].indexOf(".wav") != -1) {
+				createjs.Sound.registerSound(res[id], id);
+				continue;
+			}
+
 			self.resources[id] = new Image();
 			self.resources[id].src = res[id];
 			self.resources[id].onload = function() {
@@ -487,6 +503,7 @@ var Game = function(id) {
 					if (self.text[self.message_line].width > self.message_char) {
 						// FIXME: hardcoded font width
 						self.message_char += 6;
+						createjs.Sound.play("blip");
 						return;
 					}
 					self.message_char = 0;
@@ -573,6 +590,7 @@ var Game = function(id) {
 					&& !self.map.is_blocked(self.player.x + 18, self.player.y - 1)) {
 						self.player.inc_y = -self.jump_speed;
 						updated = true;
+						createjs.Sound.play("jump");
 				}
 
 				// short jump
@@ -618,6 +636,7 @@ var Game = function(id) {
 									&& self.map.is_water(self.player.x + 14, self.player.y + incy + 28)
 									&& self.map.is_water(self.player.x + 18, self.player.y + incy + 28)) {
 							self.player.alive = false;
+							createjs.Sound.play("splash");
 						}
 
 						// UP
@@ -626,6 +645,7 @@ var Game = function(id) {
 									|| self.map.is_blocked(self.player.x + 14, self.player.y + 4 + incy)
 									|| self.map.is_blocked(self.player.x + 18, self.player.y + 4 + incy))) {
 							if (self.player.inc_y < -self.gravity / 4) {
+								createjs.Sound.play("head");
 								self.player.inc_y = 0;
 								break;
 							}
