@@ -27,7 +27,7 @@ var Manager = function(width, height, cb_done) {
 	var self = {
 		cb_done: cb_done,
 		count: 0,
-		total: 5,
+		total: 6,
 		resources: {}
 	};
 
@@ -37,7 +37,8 @@ var Manager = function(width, height, cb_done) {
 			clouds0: "img/clouds0.png",
 			clouds1: "img/clouds1.png",
 			title: "img/dual.png",
-			tiles: "img/tiles.png"
+			tiles: "img/tiles.png",
+			player: "img/player.png"
 		};
 
 		for(id in res) {
@@ -96,6 +97,10 @@ var Map = function(data, sw, sh, manager) {
 		self.tilesets[0].rows = self.tilesets[0].imagewidth / self.tilesets[0].tilewidth;
 		self.tilesets[0].cols = self.tilesets[0].imageheight / self.tilesets[0].tileheight;
 
+		self.layers.forEach(function(l) {
+			self[l.name] = l;
+		});
+
 		self.x = 0;
 		self.y = 0;
 		self.w = Math.floor(sw / self.tilesets[0].tilewidth) + 2;
@@ -108,6 +113,26 @@ var Map = function(data, sw, sh, manager) {
 		self.frame = 0;
 
 		return self;
+	};
+
+	self.get_ent_by_name = function(name) {
+		for (var i = 0; i < self.ENTITIES.objects.length; i++) {
+			if (self.ENTITIES.objects[i].name == name) {
+				return self.ENTITIES.objects[i];
+			}
+		}
+		return undefined;
+	};
+
+	self.is_blocked = function(x, y) {
+		var mx = Math.floor(Math.floor(x) / self.tilesets[0].tilewidth),
+			my = Math.floor(Math.floor(y) / self.tilesets[0].tileheight);
+
+		return self.BLOCKED.data[mx + my * self.width] == 0;
+	};
+
+	self.map_to_screen = function(x, y) {
+		return [x - self.x, y - self.y];
 	};
 
 	self.set_viewport = function(x, y) {
@@ -135,7 +160,7 @@ var Map = function(data, sw, sh, manager) {
 		for(var y = 0; y < self.h; y++) {
 			for(var x = 0; x < self.w; x++) {
 				self.layers.forEach(function(l) {
-					if(l.type == "tilelayer") {
+					if(l.type == "tilelayer" && l.visible) {
 						var gid = l.data[x + mx + (y + my) * l.width];
 						if(gid != 0) {
 							gid -= ts.firstgid;
@@ -190,10 +215,9 @@ var Game = function(id) {
 		down: false,
 		left: false,
 		right: false,
-		fire: false,
+		jump: false,
 
-		x: 0,
-		y: 0,
+		player: undefined,
 
 		dt: 0,
 		then: 0
@@ -218,6 +242,19 @@ var Game = function(id) {
 
 		self.manager = Manager(self.width, self.height, self.loading_done);
 		self.map = Map(map, self.width, self.height, self.manager);
+
+		self.player = self.map.get_ent_by_name("Player");
+		self.player.y -= self.map.tilesets[0].tileheight + 1;
+		self.player.inc_y = 0;
+		self.player.jumping = false;
+		self.player.frame = 0;
+		self.player.dir = 0;
+		self.player.walk_delay = 0;
+		self.player.jump_delay = 0;
+
+		self.speed = 160;
+		self.gravity = self.speed * 6;
+		self.jump_speed = self.gravity / 2.6;
 
 		return self;
 	};
@@ -283,6 +320,9 @@ var Game = function(id) {
 
 	self.draw_play = function(ctx) {
 		self.map.draw(ctx);
+
+		var screen = self.map.map_to_screen(self.player.x, self.player.y);
+		ctx.drawImage(self.manager.resources["player"], self.player.frame * 28, self.player.dir * 28, 28, 28, Math.floor(screen[0]), Math.floor(screen[1]) + 2, 28, 28);
 	};
 
 	self.draw = function() {
@@ -318,25 +358,120 @@ var Game = function(id) {
 				self.bg_offset[1] += self.bg_offset[1] > self.width ? -self.width : 80 * dt;
 			break;
 			case "play":
-				var k = 200, incx = 0, incy = 0;
-				if (self.up) {
-					incy -= k * dt;
-				}
-				if (self.down) {
-					incy += k * dt;
-				}
+				var incx = 0, updated = false;
+
 				if (self.left) {
-					incx -= k * dt;
+					incx--;
 				}
 				if (self.right) {
-					incx += k * dt;
+					incx++;
 				}
 
-				if (incx || incy) {
-					self.x += incx;
-					self.y += incy;
-					self.map.set_viewport(self.x, self.y);
+				// jump
+				if(self.jump && self.player.jump_delay <= 0 && !self.player.jumping
+					&& !self.map.is_blocked(self.player.x + 10, self.player.y - 1)
+					&& !self.map.is_blocked(self.player.x + 14, self.player.y - 1)
+					&& !self.map.is_blocked(self.player.x + 18, self.player.y - 1)) {
+						self.player.inc_y = -self.jump_speed;
+						updated = true;
 				}
+
+				// short jump
+				if (!self.jump && self.player.inc_y < -self.gravity / 10) {
+					self.player.inc_y = -self.gravity / 10;
+				}
+
+				if (self.player.inc_y
+						|| (!self.map.is_blocked(self.player.x + 10, self.player.y + 29)
+						|| !self.map.is_blocked(self.player.x + 14, self.player.y + 29)
+						|| !self.map.is_blocked(self.player.x + 18, self.player.y + 29))) {
+					var only_gravity = self.player.inc_y == 0;
+					self.player.jumping = true;
+					self.player.inc_y = Math.min(self.gravity / 3, self.player.inc_y + self.gravity * dt);
+					self.player.frame = 1;
+
+					// apply gravity incrementally
+					var incy = self.player.inc_y * dt / 5;
+					for(var i = 0; i < 5 && incy; i++) {
+						// DOWN
+						if (incy > 0
+								&& (self.map.is_blocked(self.player.x + 10, self.player.y + incy + 28)
+									|| self.map.is_blocked(self.player.x + 14, self.player.y + incy + 28)
+									|| self.map.is_blocked(self.player.x + 18, self.player.y + incy + 28))) {
+							self.player.jumping = false;
+							self.player.frame = 0;
+							self.player.inc_y = 0;
+							if (!only_gravity) {
+								self.player.jump_delay = 0.1;
+							}
+							break;
+						}
+
+						// UP
+						if (incy < 0
+								&& (self.map.is_blocked(self.player.x + 10, self.player.y + 4 + incy)
+									|| self.map.is_blocked(self.player.x + 14, self.player.y + 4 + incy)
+									|| self.map.is_blocked(self.player.x + 18, self.player.y + 4 + incy))) {
+							if (self.player.inc_y < -self.gravity / 4) {
+								self.player.inc_y = 0;
+								break;
+							}
+							continue;
+						}
+
+						self.player.y += incy;
+						// XXX: REMOVE ME DEBUG
+						if(Math.abs(incy) >= 1) console.log("INCY: " + incy);
+					}
+					updated = true;
+
+				} else {
+
+					if (self.player.inc_y) {
+						self.player.jumping = false;
+						self.player.jump_delay = 0.1;
+						self.player.frame = 0;
+					}
+					self.player.inc_y = 0;
+				}
+
+				if (incx) {
+					self.player.walk_delay -= dt;
+					if (self.player.walk_delay <= 0) {
+						self.player.walk_delay = 0.14;
+						if (!self.player.inc_y) {
+							self.player.frame++;
+							self.player.frame = self.player.frame > 3 ? 0 : self.player.frame;
+						}
+					}
+
+					self.player.dir = incx > 0 ? 0 : incx < 0 ? 1 : self.player.dir;
+
+					// apply movement incrementally
+					var mod_x = self.player.dir ? 10 : 18;
+					incx = incx * dt * self.speed / 3;
+					for(var i = 0; i < 3
+							&& !self.map.is_blocked(self.player.x + incx + mod_x, self.player.y + 4)
+							&& !self.map.is_blocked(self.player.x + incx + mod_x, self.player.y + 14)
+							&& !self.map.is_blocked(self.player.x + incx + mod_x, self.player.y + 28)
+							; i++) {
+						self.player.x += incx;
+						updated = true;
+						// XXX: REMOVE ME DEBUG
+						if(Math.abs(incx) >= 1) console.log("INCX: " + incx);
+					}
+				}
+
+				if (!updated && self.player.frame) {
+					self.player.walk_delay = 0.14;
+					self.player.frame = 0;
+				}
+
+				if (self.player.jump_delay > 0) {
+					self.player.jump_delay -= dt;
+				}
+
+				self.map.set_viewport(self.player.x, self.player.y);
 
 				self.map.update(dt);
 			break;
@@ -388,7 +523,7 @@ var Game = function(id) {
 					event.preventDefault();
 				}
 				if(event.keyCode == 90) {
-					self.fire = true;
+					self.jump = true;
 					event.preventDefault();
 				}
 			break;
@@ -410,7 +545,7 @@ var Game = function(id) {
 				self.left = false;
 			}
 			if(event.keyCode == 90) {
-				self.fire = false;
+				self.jump = false;
 			}
 		}
 	};
