@@ -150,6 +150,13 @@ var Map = function(data, sw, sh, manager) {
 		return self.BLOCKED.data[mx + my * self.width] == 0;
 	};
 
+	self.is_water = function(x, y) {
+		var mx = Math.floor(Math.floor(x) / self.tilesets[0].tilewidth),
+			my = Math.floor(Math.floor(y) / self.tilesets[0].tileheight);
+
+		return self.BLOCKED.data[mx + my * self.width] == 10;
+	};
+
 	self.map_to_screen = function(x, y) {
 		return [x - self.x, y - self.y];
 	};
@@ -264,6 +271,19 @@ var Game = function(id) {
 		window.onresize = self.onresize;
 
 		self.player = self.map.get_ent_by_name("Player");
+		self.player.saved = { x: self.player.x, y: self.player.y };
+		self.reset_player();
+
+		self.speed = 160;
+		self.gravity = self.speed * 6;
+		self.jump_speed = self.gravity / 2.6;
+
+		return self;
+	};
+
+	self.reset_player = function() {
+		self.player.x = self.player.saved.x;
+		self.player.y = self.player.saved.y;
 		self.player.y -= self.map.tilesets[0].tileheight + 1;
 		self.player.inc_y = 0;
 		self.player.jumping = false;
@@ -271,12 +291,7 @@ var Game = function(id) {
 		self.player.dir = 0;
 		self.player.walk_delay = 0;
 		self.player.jump_delay = 0;
-
-		self.speed = 160;
-		self.gravity = self.speed * 6;
-		self.jump_speed = self.gravity / 2.6;
-
-		return self;
+		self.player.alive = true;
 	};
 
 	self.onresize = function() {
@@ -346,20 +361,22 @@ var Game = function(id) {
 	self.draw_message = function(ctx) {
 		ctx.save();
 		ctx.fillStyle = "rgba(33, 22, 64, 0.8)";
-		ctx.fillRect(40, 40, self.width - 80, (self.text.length + 2) * 12);
+		ctx.fillRect(40, self.height / 2 - (self.text.length + 2) * 6, self.width - 80, (self.text.length + 2) * 12);
 		ctx.strokeStyle = "rgb(255, 130, 206)";
-		ctx.rect(42, 42, self.width - 84, (self.text.length + 2) * 12 - 4);
+		ctx.beginPath();
+		ctx.rect(42, 2 + self.height / 2 - (self.text.length + 2) * 6, self.width - 84, (self.text.length + 2) * 12 - 4);
 		ctx.stroke();
 		ctx.restore();
 
+		var y = self.height / 2 - (self.text.length + 2) * 6 + 5;
 		for (var i = 0; i < self.message_line; i++) {
-			ctx.drawImage(self.text[i], 45, 45 + i * 12);
+			ctx.drawImage(self.text[i], 45, y + i * 12);
 		}
 		if (self.message_char != 0) {
-			ctx.drawImage(self.text[self.message_line], 0, 0, self.message_char, self.text[self.message_line].height, 45, 45 + self.message_line * 12, self.message_char, self.text[self.message_line].height);
+			ctx.drawImage(self.text[self.message_line], 0, 0, self.message_char, self.text[self.message_line].height, 45, y + self.message_line * 12, self.message_char, self.text[self.message_line].height);
 		}
 		if (self.message_line == self.text.length && self.message_delay < 0.8) {
-			ctx.drawImage(self.manager.resources["up"], self.width - 50 - self.manager.resources["up"].width, 45 + self.message_line * 12);
+			ctx.drawImage(self.manager.resources["up"], self.width - 50 - self.manager.resources["up"].width, y + self.message_line * 12);
 		}
 	};
 
@@ -496,6 +513,9 @@ var Game = function(id) {
 				}
 
 				if (self.up) {
+					if (!self.player.alive) {
+						self.reset_player();
+					}
 					self.state = "play";
 				}
 			break;
@@ -537,15 +557,17 @@ var Game = function(id) {
 
 				var incx = 0, updated = false;
 
-				if (self.left) {
-					incx--;
-				}
-				if (self.right) {
-					incx++;
+				if (self.player.alive) {
+					if (self.left) {
+						incx--;
+					}
+					if (self.right) {
+						incx++;
+					}
 				}
 
 				// jump
-				if(self.jump && self.player.jump_delay <= 0 && !self.player.jumping
+				if(self.player.alive && self.jump && self.player.jump_delay <= 0 && !self.player.jumping
 					&& !self.map.is_blocked(self.player.x + 10, self.player.y - 1)
 					&& !self.map.is_blocked(self.player.x + 14, self.player.y - 1)
 					&& !self.map.is_blocked(self.player.x + 18, self.player.y - 1)) {
@@ -554,7 +576,7 @@ var Game = function(id) {
 				}
 
 				// short jump
-				if (!self.jump && self.player.inc_y < -self.gravity / 10) {
+				if (self.player.alive && !self.jump && self.player.inc_y < -self.gravity / 10) {
 					self.player.inc_y = -self.gravity / 14;
 				}
 
@@ -582,6 +604,19 @@ var Game = function(id) {
 								self.player.jump_delay = 0.1;
 							}
 							break;
+						}
+
+						// water
+						if (incy > 0 && self.map.is_water(self.player.x + 10, self.player.y + incy + 28)
+									&& self.map.is_water(self.player.x + 14, self.player.y + incy + 28)
+									&& self.map.is_water(self.player.x + 18, self.player.y + incy + 28)) {
+							if (self.player.alive) {
+								self.queue_message(["Oh, dear! You're dead!", " ",
+													"The BLUE STUFF doesn't belong to this",
+													"world, avoid touching it if you want",
+													"to survive!"]);
+							}
+							self.player.alive = false;
 						}
 
 						// UP
@@ -646,6 +681,10 @@ var Game = function(id) {
 
 				if (self.player.jump_delay > 0) {
 					self.player.jump_delay -= dt;
+				}
+
+				if (!self.player.alive) {
+					self.player.frame = 4;
 				}
 
 				self.map.set_viewport(self.player.x, self.player.y);
