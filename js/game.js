@@ -76,7 +76,7 @@ var Manager = function(width, height, cb_done) {
 
 	self.render_text = function(text, id) {
 		var W = 6, H = 11;
-		var map = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?()@:/'.,- ";
+		var map = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?()@:/'.,- *";
 		var c = document.createElement("canvas");
 		c.width = text.length*W;
 		c.height = H;
@@ -303,6 +303,7 @@ var Game = function(id) {
 		self.manager.render_text("a game by @reidrac for LD30", "game_by");
 		self.manager.render_text("PAUSED GAME", "paused");
 		self.manager.render_text("(press P again to resume)", "resume");
+		self.manager.render_text("(press *)", "up");
 
 		self.canvas.style.background = "rgb(255, 130, 206)";
 		self.bg_offset = [0.0, 0.0];
@@ -342,6 +343,26 @@ var Game = function(id) {
 		ctx.restore();
 	};
 
+	self.draw_message = function(ctx) {
+		ctx.save();
+		ctx.fillStyle = "rgba(33, 22, 64, 0.8)";
+		ctx.fillRect(40, 40, self.width - 80, (self.text.length + 2) * 12);
+		ctx.strokeStyle = "rgb(255, 130, 206)";
+		ctx.rect(42, 42, self.width - 84, (self.text.length + 2) * 12 - 4);
+		ctx.stroke();
+		ctx.restore();
+
+		for (var i = 0; i < self.message_line; i++) {
+			ctx.drawImage(self.text[i], 45, 45 + i * 12);
+		}
+		if (self.message_char != 0) {
+			ctx.drawImage(self.text[self.message_line], 0, 0, self.message_char, self.text[self.message_line].height, 45, 45 + self.message_line * 12, self.message_char, self.text[self.message_line].height);
+		}
+		if (self.message_line == self.text.length && self.message_delay < 0.8) {
+			ctx.drawImage(self.manager.resources["up"], self.width - 50 - self.manager.resources["up"].width, 45 + self.message_line * 12);
+		}
+	};
+
 	self.draw_play = function(ctx) {
 		self.map.draw(ctx);
 
@@ -367,8 +388,26 @@ var Game = function(id) {
 					self.draw_paused(self.ctx);
 				}
 			break;
+			case "message":
+				self.draw_play(self.ctx);
+				self.draw_message(self.ctx);
+			break;
 		};
 		self.ctx.restore();
+	};
+
+	self.queue_message = function(text) {
+		self.text = [];
+
+		text.forEach(function(t) {
+			self.text.push(self.manager.render_text(t));
+		});
+
+		self.message_char = 0;
+		self.message_line = 0;
+		self.message_delay = 0;
+
+		self.state = "message";
 	};
 
 	self.update = function update(dt) {
@@ -387,8 +426,78 @@ var Game = function(id) {
 				 if (self.start) {
 					self.start = false;
 					self.state = "play";
-					self.map.set_viewport(0, 0);
+					self.map.set_viewport(self.player.x, self.player.y);
+
+					var text = [ "So... do you want to be a HERO?", " ",
+						         "Well, there are many ways of becoming",
+								 "one. For example, go down the pit",
+								 "where the BLUE STUFF crawls looking",
+								 "for us, THE PINKS.", " " ];
+
+					if (self.manager.has_gamepad) {
+						text.push("By the way, use your d-pad to move");
+						text.push("and button ONE for jumping.");
+					} else {
+						text.push("By the way, use your arrows to move");
+						text.push("and Z for jumping.");
+					}
+
+					self.queue_message(text);
 				 }
+			break;
+			case "message":
+				if (self.manager.has_gamepad) {
+					var gamepad = self.manager.get_gamepad();
+
+					if(bPressed(gamepad.buttons[0])) {
+						self.jump = true;
+					} else {
+						self.jump = false;
+					}
+				}
+
+				if (self.jump && self.message_line != self.text.length) {
+					self.message_delay = 1;
+				}
+
+				if (self.message_delay < 0.03) {
+					self.message_delay += dt;
+					return;
+				}
+
+				if (self.message_line != self.text.length) {
+					self.message_delay = 0;
+					if (self.text[self.message_line].width > self.message_char) {
+						// FIXME: hardcoded font width
+						self.message_char += 6;
+						return;
+					}
+					self.message_char = 0;
+					self.message_line++;
+					return;
+				}
+
+				self.message_delay = self.message_delay < 1.0 ? self.message_delay + dt : 0;
+
+				if (self.manager.has_gamepad) {
+					var gamepad = self.manager.get_gamepad();
+					if(gamepad.axes[1] < 0) {
+						self.up = true;
+						self.down = false;
+					} else {
+						if(gamepad.axes[1] > 0) {
+							self.up = false;
+							self.down = true;
+						} else {
+							self.up = false;
+							self.down = false;
+						}
+					}
+				}
+
+				if (self.up) {
+					self.state = "play";
+				}
 			break;
 			case "play":
 				if (self.manager.has_gamepad) {
